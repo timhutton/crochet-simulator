@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script>
+
+function p3( x, y, z ) { return { x:x, y:y, z:z }; }
+function p2( x, y ) { return { x:x, y:y }; }
+function origin() { return p3(0,0,0); }
+function xaxis() { return p3(1,0,0); }
+function yaxis() { return p3(0,1,0); }
+function zaxis() { return p3(0,0,0); }
+function add( a, b ) { return p3( a.x + b.x, a.y + b.y, a.z + b.z ); }
+function sub( a, b ) { return p3( a.x - b.x, a.y - b.y, a.z - b.z ); }
+function mul( a, f ) { return p3( a.x * f, a.y * f, a.z * f ); }
+function dot( a, b ) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+function len2( a ) { return dot(a,a); }
+function dist( a, b ) { return Math.sqrt( len2( sub( a, b ) ) ); }
+function assign( a, b ) { a.x = b.x; a.y = b.y; a.z = b.z; }
+function normalize( a ) { return mul( a, 1 / Math.sqrt( len2( a ) ) ); }
+function cross( a, b ) { return p3( a.y * b.z - a.z * b.y, a.z*b.x - a.x * b.z, a.x * b.y - a.y * b.x ); }
+function fuzz( a ) { var f = 0.01; return add( a, p3( Math.random()*2*f-f,Math.random()*2*f-f,Math.random()*2*f-f) ) }
+function mid( a, b ) { return mul( add( a, b ), 0.5 ); }
+
+var theta;
+var view_height;
+var camera;
+var isSpinning = true;
+var canvas;
+var ctx;
+
+var verts = [];
+var vel = []; // velocity of each vert
+var edges = []; // pairs of vert indices
+var neighbors = [];
+var pending_commands = [];
+var current_pattern = "";
+
+function getMousePos(canvas, evt) {
+    var rect = canvas.getBoundingClientRect();
+    return p2( evt.clientX - rect.left, evt.clientY - rect.top );
+}
+
+function onMouseMove( evt ) {
+    var pos = getMousePos( canvas, evt );
+    view_height = ( canvas.height / 2.0 - pos.y ) / canvas.height;
+    repositionCamera();
+}
+
+function onMouseDown( evt ) {
+    var pos = getMousePos( canvas, evt );
+    isSpinning = !isSpinning;
+    if( isSpinning ) animate();
+}
+
+function onMouseUp( evt ) {
+    redraw();
+}
+
+function repositionCamera() {
+    var look_at = p3(0,0,0);
+    var d = 40;
+    var vd = d * view_height;
+    var hd = Math.sqrt( d*d - vd*vd );
+    camera.p = p3( hd*Math.cos(theta), hd*Math.sin(theta), vd  );
+    camera.z = normalize( sub( look_at, camera.p ) );
+    var up = p3(0,0,1);
+    camera.x = normalize( cross( camera.z, up ) );
+    camera.y = normalize( cross( camera.x, camera.z ) );
+}
+
+function pointInRect( p, rect ) {
+    return p.x > rect.x && p.x < ( rect.x + rect.width ) &&
+           p.y > rect.y && p.y < ( rect.y + rect.height );
+}
+
+function add_stitch( p) {
+    verts.push( fuzz( p ) );
+    vel.push( p3(0,0,0) );
+    neighbors.push( [] );
+}
+
+function make_edge(i,j) {
+    edges.push( [i,j] );
+    neighbors[i].push( j );
+    neighbors[j].push( i );
+}
+
+// make a chain stitch into empty space
+function chain() {
+    if( verts.length < 1 ) {
+        add_stitch( p3(0,0,0) );
+    }
+    else if( verts.length < 2 ) {
+        add_stitch( p3(1,0,0) );
+        make_edge( 0, 1 );
+    }
+    else
+    {
+        // keep going in the same direction
+        var iParent = verts.length-1;
+        var iGrandparent = verts.length-2;
+        add_stitch( add( verts[iParent], normalize( sub( verts[iParent], verts[iGrandparent] ) ) ) );
+        make_edge( iParent, iParent+1 );
+    }
+}
+
+// use a slip stitch to join with the stitch of index i
+function join( i ) {
+    make_edge( verts.length-1, i );
+}
+function join_relative( ir ) {
+    join( verts.length + ir );
+}
+
+function single_crochet_with( i ) {
+    // try to put it somewhere sensible:
+    // at midpoint between joined stitch and natural extension:
+    add_stitch( mid( mid( verts[ verts.length-1 ], verts[ i ] ), add( verts[verts.length-1], normalize( sub( verts[verts.length-1], verts[verts.length-2] ) ) ) ) );
+    
+    make_edge( verts.length-1, i );
+    make_edge( verts.length-1, verts.length-2 );
+}
+
+function single_crochet_with_relative( ir ) {
+    single_crochet_with( verts.length + ir - 1 );
+}
+
+function doNextStitch() {
+    if( !pending_commands || pending_commands.length == 0 ) return;
+    var command = pending_commands.shift();
+    if( !command || command.length == 0 ) return;
+    var tokens = command.match( /(c)|(sc)(-\d+)/ );
+    if( !tokens ) { alert( 'Unknown command: ' + command ); pending_commands = []; }
+    if( tokens[1]=='c') chain();
+    else if( tokens[2]=='sc' ) single_crochet_with_relative( parseInt( tokens[3] ) );
+    else { alert( 'Unknown command: ' + command ); pending_commands = []; }
+}
+
+// too close = repulsion, too far = attraction
+function get_connection_force_on_a( a, b ) {
+    var x = sub( a, b );
+    var ab2 = len2( x );
+    var ab = Math.sqrt( ab2 );
+    var k = 0.3;
+    var d = 1;
+    return mul( x, k * ( d - ab ) / ab );
+}
+
+// too close = weak repulsion
+function get_weak_repulsion_force_on_a( a, b ) {
+    var x = sub( a, b );
+    var ab2 = len2( x );
+    var d = 8;
+    if( ab2 < d*d ) {
+        var k = 0.001;
+        var ab = Math.sqrt( ab2 );
+        return mul( x, k * ( d - ab ) / ab );
+    }
+    return p3(0,0,0);
+}
+
+// move the verts a little in the direction of sum of the forces acting on them
+function relax() {
+    // damp the speed
+    for( var a = 0; a < verts.length; ++a )
+        vel[a] = mul( vel[a], 0.97 );
+    // add a spring force along edges
+    for( var i = 0; i < edges.length; ++i ) {
+        a = edges[i][0];
+        b = edges[i][1];
+        // add the spring forces from this edge
+        var m = get_connection_force_on_a( verts[a], verts[b] );
+        vel[a] = add( vel[a], m );
+        vel[b] = sub( vel[b], m );
+    }
+    // I... I stumbled across this by a coding error. Adding an inflationary term seems to make all the difference.
+    var k = 0.001;
+    for( var i = 0; i < verts.length; ++i ) {
+        vel[i] = add( vel[i], mul( verts[i], k ) );
+    }
+    // add a weak repulsion from every second-neighbor
+    for( var a = 0; a < verts.length; ++a ) {
+        for( var iN = 0; iN < neighbors[a].length; ++iN ) {
+            var n = neighbors[a][iN];
+            for( var iNN = 0; iNN < neighbors[n].length; ++iNN ) {
+                var nn = neighbors[n][iNN];
+                if( nn == a ) continue;
+                var m = get_weak_repulsion_force_on_a( verts[a], verts[nn] );
+                vel[a] = add( vel[a], m );
+            }
+        }
+    }
+    // apply the movement
+    var max_speed = 0;
+    for( var a = 0; a < verts.length; ++a )
+    {
+        var speed = Math.sqrt( len2( vel[a] ) );
+        if( speed > 0.2 )
+            vel[a] = mul( vel[a], 0.2 / speed );
+        verts[a] = add( verts[a], vel[a] );
+        max_speed = Math.max( speed, max_speed );
+    }
+    recenter();
+    
+    return max_speed < 0.1; // have we relaxed enough?
+}
+
+function recenter() {
+    var c = p3(0,0,0);
+    for( var i = 0; i < verts.length; ++i )
+        c = add( c, verts[i] );
+    c = mul( c, 1/verts.length );
+    for( var i = 0; i < verts.length; ++i )
+        verts[i] = sub( verts[i], c );
+}
+
+function loadPattern( pattern ) {
+    current_pattern += pattern;
+    // remove optional characters
+    pattern.replace( /,/g, '' );
+    // expand out repeating sections
+    while(1) {
+        var end = pattern.indexOf(')');
+        if( end==-1) break;
+        var start = pattern.lastIndexOf('(',end);
+        if( start==-1) break;
+        var inside = pattern.substring(start+1,end);
+        var after = pattern.substr(end+1);
+        var digits_tokens = after.match(/\d+/);
+        if( !digits_tokens ) break;
+        var digits = digits_tokens[0];
+        var pre = pattern.substring(-1,start);
+        var post = pattern.substr( end+1+digits.length );
+        pattern = pre + new Array( parseInt(digits)+1 ).join( inside ) + post;
+    }
+    pending_commands = pending_commands.concat( pattern.match( /c|sc-\d+/g ) );
+}
+
+function init() {
+    canvas = document.getElementById('canvas');
+    ctx = canvas.getContext('2d');
+
+    theta = Math.PI / 2;
+    view_height = 0.5;
+    camera = { p:p3(0,3,-6),
+               x:p3(1,0,0), 
+               y:p3(0,1,0), 
+               z:p3(0,0,1), 
+               f:canvas.height,
+               pp:p2(canvas.width/2,canvas.height/2) 
+             };
+    repositionCamera();
+    
+    var pattern = "";
+    if( window.location.search.length > 0 ) {
+        pattern = window.location.search.replace( /\?/g, '' );
+    }
+    else {
+        var cylinder = "(c)21(sc-20)100";
+        var granny = "(c)12(csc-2sc-4sc-6sc-8sc-10sc-12sc-14sc-16sc-18sc-20sc-22)11";
+        pattern = cylinder;
+    }
+    loadPattern( pattern );
+    updateShareLink();
+    
+    redraw();
+
+    canvas.addEventListener( 'mousemove', onMouseMove, false );
+    canvas.addEventListener( 'touchmove', onMouseMove, false );
+    canvas.addEventListener( 'touchstart', onMouseDown, false );
+    canvas.addEventListener( 'mousedown',  onMouseDown, false );
+    canvas.addEventListener( 'touchend', onMouseUp, false );
+    canvas.addEventListener( 'mouseup',  onMouseUp, false );
+    canvas.addEventListener( 'mouseout',  onMouseUp, false );
+    
+    animate();
+}
+
+function camera_projection( p, camera ) {
+    var ray = sub( p, camera.p ); // the ray from camera center to point
+    var cp = p3( dot( camera.x, ray ), dot( camera.y, ray ), dot( camera.z, ray ) ); // into camera space
+    return p3( cp.x * camera.f / cp.z + camera.pp.x, 
+               canvas.height - ( cp.y * camera.f / cp.z + camera.pp.y ),
+               cp.z );
+}
+
+function redraw() {
+    drawMesh();
+    drawUI();
+}
+
+function point( p ) { 
+    ctx.beginPath(); 
+    ctx.arc( p.x, p.y, 2, 0, 2.0 * Math.PI ); 
+    ctx.fill(); 
+}
+
+function drawMesh() {
+
+    var box_verts = [ p3(-10,-10,-10), p3(-10,10,-10), p3(10,10,-10), p3(10,-10,-10), p3(-10,-10,10), p3(-10,10,10), p3(10,10,10), p3(10,-10,10) ];
+    var box_verts2d = [];
+    for( var iVert = 0; iVert < box_verts.length; ++iVert ) {
+        box_verts2d[ iVert ] = camera_projection( box_verts[ iVert ], camera );
+    }
+    var box_edges = [ [0,1], [1,2], [2,3], [3,0], [4,5], [5,6], [6,7], [7,4], [0,4], [1,5], [2,6], [3,7] ];
+
+    // project the mesh onto the screen
+    var verts2d = []
+    for( var iVert = 0; iVert < verts.length; ++iVert ) {
+        verts2d[ iVert ] = camera_projection( verts[ iVert ], camera );
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeRect(0, 0, canvas.width, canvas.height);
+    
+    // draw the box edges
+    ctx.strokeStyle = "rgb(230,230,230)";
+    ctx.beginPath();
+    for( var i = 0; i < box_edges.length; ++i )
+    {
+        var a = box_verts2d[ box_edges[i][0] ];
+        var b = box_verts2d[ box_edges[i][1] ];
+        ctx.moveTo( a.x, a.y );
+        ctx.lineTo( b.x, b.y );
+    }
+    ctx.stroke();
+
+    // draw the edges
+    ctx.strokeStyle = "rgb(200,200,200)";
+    ctx.beginPath();
+    for( var i = 0; i < edges.length; ++i ) {
+        var a = verts2d[ edges[i][0] ];
+        var b = verts2d[ edges[i][1] ];
+        ctx.moveTo( a.x, a.y );
+        ctx.lineTo( b.x, b.y );
+    }
+    ctx.stroke();
+    
+    // draw the verts
+    ctx.fillStyle = "rgb(0,0,0)";
+    for( var i = 0; i < verts2d.length; ++i )
+        point( verts2d[i], "" );
+}
+
+function drawRect( x, y, w, h ) {
+    ctx.beginPath();
+    ctx.rect( x, y, w, h );
+    ctx.fill();
+    ctx.stroke();
+}
+
+function drawUI() {
+    if( pending_commands.length > 0 ) {
+        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        ctx.font = "20px Arial";
+        ctx.fillText( 'Adding stitches...', 20, 30 );
+    }
+}
+
+function animate() {
+    if( isSpinning ) {
+        // rotate round
+        theta += 0.005;
+        repositionCamera();
+    }
+    var is_relaxed = relax();
+    if( is_relaxed )
+        doNextStitch();
+    redraw();
+    requestAnimationFrame( animate );
+}
+
+function updateShareLink() {
+    var new_url = window.location.protocol + '//' + window.location.host + window.location.pathname + "?" + current_pattern;
+    document.getElementById('link').innerHTML = "Share this pattern: <a href=\""+new_url+"\">"+current_pattern+"</a>";
+    document.getElementById('current_stitches').value = current_pattern;
+    window.history.pushState( {}, "", new_url );
+}
+
+function addInputStitches() {
+    var new_stitches = document.getElementById('input_stitches').value;
+    if( new_stitches.length == 0 ) return;
+    loadPattern( new_stitches );
+    updateShareLink();
+    document.getElementById('input_stitches').value = "";
+}
+
+function setPattern() {
+    // clear the existing pattern
+    verts = [];
+    vel = [];
+    edges = [];
+    neighbors = [];
+    pending_commands = [];
+    current_pattern = "";
+    
+    var new_pattern = document.getElementById('current_stitches').value;
+    loadPattern( new_pattern );
+    updateShareLink();
+}
+
+window.onload = init;
+</script>
+
+<noscript>
+<p>For full functionality of this site it is necessary to enable JavaScript.
+Here are the <a href="http://www.enable-javascript.com/" target="_blank">
+instructions how to enable JavaScript in your web browser</a>.
+</p></noscript>
+
+</head>
+
+<body>
+
+<p align="center"><canvas id="canvas" width="1000" height="600">(Canvas drawing not supported by your browser.)</canvas></p>
+
+<div id="link">link</div>
+
+<table border="0" cellpadding="20">
+<tr>
+<td width="50%" valign="top">
+
+<p>Add stitches: 
+  <input type="text" id="input_stitches" cols="20" style="vertical-align:top">
+  <input type="button" value="Add" onclick="addInputStitches();" style="vertical-align:top">
+</p>
+
+<p>Edit pattern: 
+  <textarea id="current_stitches" rows="10" cols="30" style="vertical-align:top"></textarea>
+  <input type="button" value="Update" onclick="setPattern();" style="vertical-align:top">
+</p>
+
+</td>
+<td width="50%">
+
+<p><b>Syntax:</b></p>
+<table border="0" cellpadding="10">
+<tr><td align="right">c</td><td>chain</td></tr>
+<tr><td align="right">sc<i>-n</i></td><td>single crochet joined to the stitch from <i>n</i> stitches ago</td></tr>
+<tr><td align="right">(<i>seq</i>)<i>n</i></td><td>repeat <i>seq</i> for <i>n</i> times</td></tr>
+</table>
+
+<p><b>Examples:</b></p>
+<table border="0" cellpadding="10">
+<tr><td align="right"><tt>(c)20</tt></td><td>chain 20</td></tr>
+<tr><td align="right"><tt>(c)20,sc-19</tt></td><td>make a loop of 20 chained stitches joined with a single crochet</td></tr>
+<tr><td align="right"><tt>c,c,c,c,sc-2,sc-4</tt></td><td>make two rows of 3 stitches</td></tr>
+</table>
+<p>(You can copy-paste these examples into the 'Edit Pattern' box on the left and then hit 'Update'.)</p>
+
+<p><b>Controls:</b></p>
+<table border="0" cellpadding="10">
+<tr><td align="right"><tt>mouse up and down</tt></td><td>moves the viewpoint up and down</td></tr>
+<tr><td align="right"><tt>mouse click</tt></td><td>starts or stops the spinning</td></tr>
+</table>
+
+</td></tr></table>
+
+<hr>
+
+<h3>What am I looking at?</h3>
+
+<p>This is a crochet simulator. It shows you what shape you might get if you follow a crochet pattern.</p>
+
+<p>To try it out, type <tt>c</tt> in the 'Add stitches' box above and hit the 'Add' button. 
+The new chain stitch is added to the pattern and appears in the 3D view. Do it a few times, or type <tt>cccc</tt> to add several at once.
+
+<p>Other commands are shown in the section on the right. Commas between stitches are optional.
+
+<p>Here's the pattern for a granny square: <tt>(c)12(c,sc-2,sc-4,sc-6,sc-8,sc-10,sc-12,sc-14,sc-16,sc-18,sc-20,sc-22)11</tt>
+
+ 
+
+</html>
+
