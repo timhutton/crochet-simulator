@@ -175,7 +175,7 @@ function relax() {
         vel[b] = sub( vel[b], m );
     }
     // I... I stumbled across this by a coding error. Adding an inflationary term seems to make all the difference.
-    var k = 0.001;
+    var k = 0.0001;
     for( var i = 0; i < verts.length; ++i ) {
         vel[i] = add( vel[i], mul( verts[i], k ) );
     }
