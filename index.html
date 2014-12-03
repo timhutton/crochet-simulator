@@ -354,7 +354,7 @@ function drawUI() {
     if( pending_commands.length > 0 ) {
         ctx.fillStyle = "rgba(0,0,0,0.2)";
         ctx.font = "20px Arial";
-        ctx.fillText( 'Adding stitches...', 20, 30 );
+        ctx.fillText( 'Adding stitches (' + verts.length + " of " + (verts.length+pending_commands.length) + ") ...", 20, 30 );
     }
 }
 
