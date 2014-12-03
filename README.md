@@ -5,6 +5,8 @@ Predicting the 3D shape from a crochet pattern.
 
 Demos:
 
+[Cylinder](http://timhutton.github.io/crochet-simulator/)
+
 [Flat spiral disc](http://timhutton.github.io/crochet-simulator/?(c)5sc-4sc-5(sc-6)2(sc-7)2(sc-8)2(sc-9)2(sc-10)2(sc-11)2(sc-12)2(sc-13)3(sc-14)3(sc-15)3(sc-16)3(sc-17)3(sc-18)3(sc-19)4(sc-20)4(sc-21)4(sc-22)4(sc-23)4(sc-24)4(sc-25)5(sc-26)5(sc-27)5(sc-28)5(sc-29)5(sc-30)5(sc-31)6(sc-32)6(sc-33)6(sc-34)6(sc-35)6(sc-36)6(sc-37)7)
 
 [12x12 granny square](http://timhutton.github.io/crochet-simulator/?(c)12(c,sc-2,sc-4,sc-6,sc-8,sc-10,sc-12,sc-14,sc-16,sc-18,sc-20,sc-22)11)
