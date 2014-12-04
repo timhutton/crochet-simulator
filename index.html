@@ -126,15 +126,30 @@ function single_crochet_with_relative( ir ) {
     single_crochet_with( verts.length + ir - 1 );
 }
 
+function single_crochet_with_two_relative( ir, ir2 ) {
+    single_crochet_with( verts.length + ir - 1 );
+    make_edge( verts.length-1, verts.length + ir2 - 2 );
+}
+
 function doNextStitch() {
     if( !pending_commands || pending_commands.length == 0 ) return;
     var command = pending_commands.shift();
     if( !command || command.length == 0 ) return;
-    var tokens = command.match( /(c)|(sc)(-\d+)/ );
+    var tokens = command.match( /(c)|(sc)(-\d+)(-\d+)|(sc)(-\d+)/ );
     if( !tokens ) { alert( 'Unknown command: ' + command ); pending_commands = []; }
-    if( tokens[1]=='c') chain();
-    else if( tokens[2]=='sc' ) single_crochet_with_relative( parseInt( tokens[3] ) );
-    else { alert( 'Unknown command: ' + command ); pending_commands = []; }
+    if( tokens[1]=='c') {
+        chain();
+    }
+    else if( tokens[2]=='sc' ) {
+        single_crochet_with_two_relative( parseInt( tokens[3] ), parseInt( tokens[4] ) );
+    }
+    else if( tokens[5]=='sc' ) {
+        single_crochet_with_relative( parseInt( tokens[6] ) );
+    }
+    else { 
+        alert( 'Unknown command: ' + command ); 
+        pending_commands = []; 
+    }
 }
 
 // too close = repulsion, too far = attraction
@@ -218,7 +233,7 @@ function recenter() {
 function loadPattern( pattern ) {
     current_pattern += pattern;
     // remove optional characters
-    pattern.replace( /,/g, '' );
+    pattern.replace( /,\n\r/g, '' );
     // expand out repeating sections
     while(1) {
         var end = pattern.indexOf(')');
@@ -234,7 +249,7 @@ function loadPattern( pattern ) {
         var post = pattern.substr( end+1+digits.length );
         pattern = pre + new Array( parseInt(digits)+1 ).join( inside ) + post;
     }
-    pending_commands = pending_commands.concat( pattern.match( /c|sc-\d+/g ) );
+    pending_commands = pending_commands.concat( pattern.match( /c|sc-\d+-\d+|sc-\d+/g ) );
 }
 
 function init() {
@@ -258,7 +273,6 @@ function init() {
     }
     else {
         var cylinder = "(c)21(sc-20)100";
-        var granny = "(c)12(csc-2sc-4sc-6sc-8sc-10sc-12sc-14sc-16sc-18sc-20sc-22)11";
         pattern = cylinder;
     }
     loadPattern( pattern );
@@ -438,6 +452,7 @@ instructions how to enable JavaScript in your web browser</a>.
 <table border="0" cellpadding="10">
 <tr><td align="right">c</td><td>chain</td></tr>
 <tr><td align="right">sc<i>-n</i></td><td>single crochet joined to the stitch from <i>n</i> stitches ago</td></tr>
+<tr><td align="right">sc<i>-n-m</i></td><td>single crochet joined to two stitches: from <i>n</i> stitches agoand from <i>m</i> stitches ago</td></tr>
 <tr><td align="right">(<i>seq</i>)<i>n</i></td><td>repeat <i>seq</i> for <i>n</i> times</td></tr>
 </table>
 
@@ -475,4 +490,5 @@ The new chain stitch is added to the pattern and appears in the 3D view. Do it a
 <p>More details here: <a href="https://github.com/timhutton/crochet-simulator">https://github.com/timhutton/crochet-simulator</a></p> 
 
 </html>
+
 
