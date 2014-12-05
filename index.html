@@ -126,9 +126,12 @@ function single_crochet_with_relative( ir ) {
     single_crochet_with( verts.length + ir - 1 );
 }
 
-function single_crochet_with_two_relative( ir, ir2 ) {
-    single_crochet_with( verts.length + ir - 1 );
-    make_edge( verts.length-1, verts.length + ir2 - 2 );
+function single_crochet_with_two_relative( ir1, ir2 ) {
+    var i1 = verts.length - 1 + ir1;
+    var i2 = verts.length - 1 + ir2;
+    single_crochet_with( i1 );
+    make_edge( verts.length-1, i2 );
+    make_edge( i1, i2 ); // this stitch adds an extra edge pulling the two joined ones together
 }
 
 function doNextStitch() {
