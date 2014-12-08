@@ -101,7 +101,7 @@ function add_possible_face( i, j, k ) {
         // i and k are already joined, so we have a triangle
         make_face3(i,j,k);
     else {
-        // is there a fourth vertex connected to both i and k that make a quad?
+        // is there a fourth vertex connected to both i and k that make a quad? (there may be more than one)
         for( var m = 0; m < verts.length; ++m ) {
             if( m==i || m==j || m==k ) continue;
             if( neighbors[i].indexOf(m) > -1 && neighbors[k].indexOf(m) > -1 )
@@ -444,7 +444,7 @@ function addInputStitches() {
     document.getElementById('input_stitches').value = "";
 }
 
-function setPattern() {
+function clear() {
     // clear the existing pattern
     verts = [];
     vel = [];
@@ -453,10 +453,54 @@ function setPattern() {
     faces = [];
     pending_commands = [];
     current_pattern = "";
-    
+}
+
+function setPattern() {
+    clear();    
     var new_pattern = document.getElementById('current_stitches').value;
     loadPattern( new_pattern );
     updateShareLink();
+}
+
+function setRowLengths() {
+    clear();
+    var lengths = document.getElementById('row_lengths').value.split(',').map(Number);
+    var pattern = makePatternFromRowLengths( lengths );
+    loadPattern( pattern );
+    updateShareLink();
+}
+
+function makePatternFromRowLengths( lengths ) {
+    // first row: make a loop by chaining and a single crochet at the end
+    var n = lengths[0];
+    var pattern = "(c)" + (n-1).toFixed(0) + "sc-" + (n-2).toFixed(0);
+    var prev = n;
+    // other rows: spiral round, increasing and decreasing as necessary
+    for( var iRow = 1; iRow < lengths.length; ++iRow ) {
+        n = lengths[iRow];
+        if( n > prev )
+        {
+            // add increases at evenly spaced intervals
+            var num_increases = n - prev;
+            var rate = Math.round( prev / num_increases );
+            for( var i = 0; i < num_increases; ++i ) {
+                pattern += "(sc-" + (prev+i-1).toFixed(0) + ")" + (rate+1).toFixed(0);
+            }
+            //var remainder = n - (rate+1)*num_increases;
+            //pattern += "(sc-" + (prev+num_increases-1).toFixed(0) + ")" + remainder;
+        }
+        else if( n < prev )
+        {
+            // add decreases at evenly spaced intervals
+            var rate = Math.floor( prev / ( prev - n ) );
+            alert( 'decrease rate: ' + rate.toFixed(0) );
+        }
+        else {
+            // same length as previous row - just add single crochets all the way round
+            pattern += "(sc-" + (n-1).toFixed(0) +")" + (n-1).toFixed(0) + "sc-" + (n-1).toFixed(0) + "-" + (n-2).toFixed(0);
+        }
+    }
+    return pattern;
 }
 
 window.onload = init;
@@ -518,17 +562,18 @@ instructions how to enable JavaScript in your web browser</a>.
 </td></tr></table>
 
 <hr>
-
+<!--
 <h3>Specify the row lengths:</h3>
 <p>The section above is powerful but hard to use. If you are crocheting in the round then you can just specify how many stitches are in each row and it will compute the stitches for you.</p>
 <p>Enter comma-separated row lengths in the box below, and hit the 'Go' button. E.g. <tt>6,13,19,25,31</tt>
 
 <p>
   <textarea id="row_lengths" rows="10" cols="30" style="vertical-align:top"></textarea>
-  <input type="button" value="Go" onclick="setPattern();" style="vertical-align:top">
+  <input type="button" value="Go" onclick="setRowLengths();" style="vertical-align:top">
 </p>
 
 <hr>
+-->
 
 <h3>What am I looking at?</h3>
 
