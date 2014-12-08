@@ -33,6 +33,7 @@ var verts = [];
 var vel = []; // velocity of each vert
 var edges = []; // pairs of vert indices
 var neighbors = [];
+var faces = []; // list of vert indices
 var pending_commands = [];
 var current_pattern = "";
 
@@ -86,6 +87,29 @@ function make_edge(i,j) {
     neighbors[j].push( i );
 }
 
+function make_face3(i,j,k) {
+    faces.push( [i,j,k] );
+}
+
+function make_face4(i,j,k,m) {
+    faces.push( [i,j,k,m] );
+}
+
+function add_possible_face( i, j, k ) {
+    // verts i,j,k have been joined by two edges ij and jk. does this make a face?
+    if( neighbors[i].indexOf(k) > -1 )
+        // i and k are already joined, so we have a triangle
+        make_face3(i,j,k);
+    else {
+        // is there a fourth vertex connected to both i and k that make a quad?
+        for( var m = 0; m < verts.length; ++m ) {
+            if( m==i || m==j || m==k ) continue;
+            if( neighbors[i].indexOf(m) > -1 && neighbors[k].indexOf(m) > -1 )
+                make_face4(i,j,k,m);
+        }
+    }
+}
+
 // make a chain stitch into empty space
 function chain() {
     if( verts.length < 1 ) {
@@ -120,6 +144,7 @@ function single_crochet_with( i ) {
     
     make_edge( verts.length-1, i );
     make_edge( verts.length-1, verts.length-2 );
+    add_possible_face( i, verts.length-1, verts.length-2 );
 }
 
 function single_crochet_with_relative( ir ) {
@@ -132,6 +157,9 @@ function single_crochet_with_two_relative( ir1, ir2 ) {
     single_crochet_with( i1 );
     make_edge( verts.length-1, i2 );
     make_edge( i1, i2 ); // this stitch adds an extra edge pulling the two joined ones together
+    make_face3( verts.length-1, i1, i2 );
+    add_possible_face( i1, verts.length-1, verts.length-2 );
+    add_possible_face( i2, verts.length-1, verts.length-2 );
 }
 
 function doNextStitch() {
@@ -342,6 +370,19 @@ function drawMesh() {
         ctx.lineTo( b.x, b.y );
     }
     ctx.stroke();
+    
+    // draw the faces
+    ctx.fillStyle = "rgba(200,210,255,0.2)";
+    for( var iFace = 0; iFace < faces.length; ++iFace ) {
+        var a = verts2d[ faces[iFace][0] ];
+        ctx.beginPath();
+        ctx.moveTo( a.x, a.y );
+        for( var i = 1; i < faces[iFace].length; ++i ) {
+            a = verts2d[ faces[iFace][i] ];
+            ctx.lineTo( a.x, a.y );
+        }
+        ctx.fill();
+    }
 
     // draw the edges
     ctx.strokeStyle = "rgb(200,200,200)";
@@ -409,6 +450,7 @@ function setPattern() {
     vel = [];
     edges = [];
     neighbors = [];
+    faces = [];
     pending_commands = [];
     current_pattern = "";
     
@@ -477,6 +519,17 @@ instructions how to enable JavaScript in your web browser</a>.
 
 <hr>
 
+<h3>Specify the row lengths:</h3>
+<p>The section above is powerful but hard to use. If you are crocheting in the round then you can just specify how many stitches are in each row and it will compute the stitches for you.</p>
+<p>Enter comma-separated row lengths in the box below, and hit the 'Go' button. E.g. <tt>6,13,19,25,31</tt>
+
+<p>
+  <textarea id="row_lengths" rows="10" cols="30" style="vertical-align:top"></textarea>
+  <input type="button" value="Go" onclick="setPattern();" style="vertical-align:top">
+</p>
+
+<hr>
+
 <h3>What am I looking at?</h3>
 
 <p>This is a crochet simulator. It shows you what shape you might get if you follow a crochet pattern.</p>
@@ -493,5 +546,6 @@ The new chain stitch is added to the pattern and appears in the 3D view. Do it a
 <p>More details here: <a href="https://github.com/timhutton/crochet-simulator">https://github.com/timhutton/crochet-simulator</a></p> 
 
 </html>
+
 
 
