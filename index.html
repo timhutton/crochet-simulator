@@ -474,44 +474,40 @@ function makePatternFromRowLengths( lengths ) {
     // first row: make a loop by chaining and a single crochet at the end
     var n = lengths[0];
     var pattern = "(c)" + (n-1).toFixed(0) + "sc-" + (n-2).toFixed(0);
+    var pending_stitch = "";
+    var n_pending = 0;
     // other rows: spiral round, increasing and decreasing as necessary
-    for( var iRow = 1; iRow < lengths.length; ++iRow ) {
-        var prev = n;
-        n = lengths[iRow];
-        if( n > prev )
-        {
-            // add increases at evenly spaced intervals
-            var num_increases = n - prev;
-            var remainder = n;
-            var rate = Math.floor( prev / num_increases );
-            var x = 0;
-            for( var i = 0; i < num_increases; ++i ) {
-                pattern += "(sc-" + (prev+i-1).toFixed(0) + ")" + (rate+1).toFixed(0);
-                remainder -= rate+1;
+    for( iRow = 1; iRow < lengths.length; ++iRow ) {
+        var x1 = lengths[ iRow-1 ];
+        var x2 = lengths[ iRow ];
+        var dy = x2 - x1;
+        var prev_ri = 0;
+        for( var i = 0; i < x2; ++i ) {
+            var ri = -x1 - Math.round( i * dy / x2 ) + 1;
+            var new_stitch = "";
+            if( ri == prev_ri + 1 )
+                new_stitch = "sc" + prev_ri.toFixed(0) + ri.toFixed(0); // invisible decrease
+            else
+                new_stitch += "sc" + ri.toFixed(0);
+            if( new_stitch == pending_stitch )
+                n_pending++;
+            else {
+                // flush the pending buffer
+                if( n_pending > 1 )
+                    pattern += "(" + pending_stitch + ")" + n_pending.toFixed(0);
+                else
+                    pattern += pending_stitch;
+                // push the new stitch onto the buffer
+                n_pending = 1;
+                pending_stitch = new_stitch;
             }
-            if( remainder > 0 )
-                pattern += "(sc-" + (prev+num_increases-1).toFixed(0) + ")" + remainder.toFixed(0);
-        }
-        else if( n < prev )
-        {
-            // add decreases at evenly spaced intervals
-            var num_decreases = prev - n;
-            var remainder = n;
-            var rate = Math.floor( prev / num_decreases );
-            for( var i = 0; i < num_decreases; ++i ) {
-                // use an invisible decrease to avoid a hole
-                pattern += "(sc-" + (prev-i-1).toFixed(0) + ")" + (rate-2).toFixed(0) 
-                         + "sc-" + (prev-i-1).toFixed(0) + "-" + (prev-i-2).toFixed(0);
-                remainder -= rate-1;
-            }
-            if( remainder > 0 )
-                pattern += "(sc-" + (prev-num_decreases-1).toFixed(0) + ")" + remainder.toFixed(0);
-        }
-        else {
-            // same length as previous row - just add single crochets all the way round
-            pattern += "(sc-" + (n-1).toFixed(0) +")" + (n-1).toFixed(0) + "sc-" + (n-1).toFixed(0) + "-" + (n-2).toFixed(0);
+            prev_ri = ri;
         }
     }
+    if( n_pending > 1 )
+        pattern += "(" + pending_stitch + ")" + n_pending.toFixed(0);
+    else
+        pattern += pending_stitch;
     return pattern;
 }
 
@@ -573,7 +569,6 @@ instructions how to enable JavaScript in your web browser</a>.
 
 </td></tr></table>
 
-<!--
 <hr>
 
 <h3>Specify the row lengths:</h3>
@@ -584,7 +579,6 @@ instructions how to enable JavaScript in your web browser</a>.
   <textarea id="row_lengths" rows="10" cols="30" style="vertical-align:top"></textarea>
   <input type="button" value="Go" onclick="setRowLengths();" style="vertical-align:top">
 </p>
--->
 
 <hr>
 
@@ -604,6 +598,7 @@ The new chain stitch is added to the pattern and appears in the 3D view. Do it a
 <p>More details here: <a href="https://github.com/timhutton/crochet-simulator">https://github.com/timhutton/crochet-simulator</a></p> 
 
 </html>
+
 
 
 
