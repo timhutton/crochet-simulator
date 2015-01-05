@@ -20,3 +20,4 @@ Add your own patterns to the wiki: https://github.com/timhutton/crochet-simulato
 Other work:
 
   * http://www.cemyuksel.com/research/stitchmeshes/ (SIGGRAPH 2012)
+  * http://www.slideshare.net/jmallos/triangle-strip-knitting (James Mallos, ISAMA 2010)
