@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>-
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -400,7 +400,6 @@ function drawMesh() {
         ctx.fill();
     }
     
-    /*
     // draw the target_mesh faces
     ctx.fillStyle = "rgba(200,210,255,0.4)";
     for( var iFace = 0; iFace < target_mesh.faces.length; ++iFace ) {
@@ -425,7 +424,6 @@ function drawMesh() {
         ctx.lineTo( b.x, b.y );
     }
     ctx.stroke();
-    */
 
     // draw the stitch mesh edges
     ctx.strokeStyle = "rgb(200,200,200)";
@@ -438,7 +436,6 @@ function drawMesh() {
     }
     ctx.stroke();
  
-    /*
     // draw the stitch path
     ctx.strokeStyle = "rgb(255,100,100)";
     ctx.beginPath();
@@ -457,7 +454,6 @@ function drawMesh() {
         ctx.lineTo( b.x, b.y );
     }
     ctx.stroke();
-    */
     
     // draw the verts
     ctx.fillStyle = "rgb(0,0,0)";
@@ -578,17 +574,16 @@ function makePatternFromRowLengths( lengths ) {
 function setTargetMesh() {
     // clear
     target_mesh = { 
-        verts: [], // each: { p3: p3, p2: p3, edges: [], faces: [] }
+        verts: [], // each: { p3: p3, p2: p3, edges: [], faces: [] }  N.B. here edges is a sparse array (contains undefined)
         edges: [], // each: { verts: [], faces: [] }
         faces: [], // each: { verts: [], edges: [], visited: bool }
     };
-    stitch_path = [];
     // parse the lines of the OBJ
     var mesh_text = document.getElementById('target_mesh').value.split('\n');
     for( var iLine = 0; iLine < mesh_text.length; ++iLine ) {
         var entries = mesh_text[ iLine ].split(' ');
         if( entries[0] == 'v' ) {
-            target_mesh.verts.push( { p3: mul( p3( parseFloat( entries[1] ), parseFloat( entries[2] ), parseFloat( entries[3] ) ), 300 ), edges: [], faces: [] } );
+            target_mesh.verts.push( { p3: mul( p3( parseFloat( entries[1] ), parseFloat( entries[2] ), parseFloat( entries[3] ) ), 100 ), edges: [], faces: [] } );
         }
         else if( entries[0] == 'f' ) {
             var ids = [];
@@ -619,8 +614,42 @@ function setTargetMesh() {
             }
         }
     }
+    if( !checkTargetMeshIntegrity() )
+        return;
+    makeStitchPathForTargetMesh();
+}
+
+function checkTargetMeshIntegrity() {
+    // for each vert: same number of edges and faces? and >2?
+    for( var iVert = 0; iVert < target_mesh.verts.length; ++iVert ) {
+        if( getDefinedCount( target_mesh.verts[ iVert ].edges ) != target_mesh.verts[ iVert ].faces.length )
+            return false;
+        if( target_mesh.verts[ iVert ].faces.length <= 2 )
+            return false;
+    }
+    // for edges: does each edge join exactly two faces?
+    for( var iEdge = 0; iEdge < target_mesh.edges.length; ++iEdge ) {
+        if( typeof target_mesh.edges[ iEdge ] == 'undefined' )
+            continue; // (edges is a sparse array)
+        if( target_mesh.edges[ iEdge ].verts.length != 2 )
+            return false;
+        if( target_mesh.edges[ iEdge ].faces.length != 2 )
+            return false;
+    }
+    // for faces: same number of edges and verts? and >2?
+    for( var iFace = 0; iFace < target_mesh.faces.length; ++iFace ) {
+        if( target_mesh.faces[ iFace ].verts.length != target_mesh.faces[ iFace ].edges.length )
+            return false;
+        if( target_mesh.faces[ iFace ].verts.length <= 2 )
+            return false;
+    }
+    return true;
+}
+
+function makeStitchPathForTargetMesh() {
+    stitch_path = [];
     // 0. start the stitch path with something
-    var iEnd = 0;
+    var iEnd = Math.floor( Math.random() * target_mesh.faces.length );
     stitch_path = [ iEnd ];
     target_mesh.faces[ iEnd ].visited = true;
     // 1. grow the end
@@ -663,7 +692,7 @@ function setTargetMesh() {
             var iFace2 = stitch_path[ iiStitch+1 ];
             var iEdge = getSharedEdge( iFace1, iFace2 );
             if( iEdge == -1 ) 
-                continue; // TODO: this shouldn't happen
+                break; // TODO: this shouldn't happen
             // find the two vertices in the target mesh at the end of the edge that this stitch crosses
             var iVert1 = target_mesh.edges[ iEdge ].verts[0];
             var iVert2 = target_mesh.edges[ iEdge ].verts[1];
@@ -685,20 +714,25 @@ function setTargetMesh() {
     }
 }
 
-function extendStitchAroundVert( iiStitch, iVert ) {
+function extendStitchAroundVert( iStartStitch, iVert ) {
+    if( !stitchPathIsValid() ) {
+        // internal error
+        return;
+    }
     // re-route the stitch path around the other side of iVert
-    var iStartFace = stitch_path[ iiStitch ];
-    var iEndFace = stitch_path[ iiStitch+1 ];
+    var iStartFace = stitch_path[ iStartStitch ];
+    var iEndFace = stitch_path[ iStartStitch + 1 ];
     // insert an unvisited face that is a neighbor of iEndFace and has iVert as a vert, while one exists
+    var added = false;
     while( true ) {
-        var added = false;
+        added = false;
         for( var iiFace = 0; iiFace < target_mesh.verts[ iVert ].faces.length; ++iiFace ) {
             var iFace = target_mesh.verts[ iVert ].faces[ iiFace ];
             var iEdge = getSharedEdge( iFace, iEndFace );
             if( !target_mesh.faces[ iFace ].visited && iEdge > -1 )
             {
                 // insert the new stitch into the path
-                stitch_path.splice( iiStitch, 0, iFace );
+                stitch_path.splice( iStartStitch + 1, 0, iFace ); // (insert just before iStartStitch+1)
                 target_mesh.faces[ iFace ].visited = true;
                 iEndFace = iFace;
                 added = true;
@@ -707,6 +741,22 @@ function extendStitchAroundVert( iiStitch, iVert ) {
         }
         if( !added ) break;
     }
+    if( !stitchPathIsValid() ) {
+        // internal error
+        return;
+    }
+}
+
+function stitchPathIsValid() {
+    for( var iiStitch2 = 0; iiStitch2 < stitch_path.length - 1; ++iiStitch2 ) {
+        // can we grow this stitch by extending sideways around a vert?
+        var iFace1 = stitch_path[ iiStitch2 ];
+        var iFace2 = stitch_path[ iiStitch2 + 1 ];
+        var iEdge = getSharedEdge( iFace1, iFace2 );
+        if( iEdge == -1 ) 
+            return false;
+    }
+    return true;
 }
 
 function getSharedEdge( iFace1, iFace2 ) {
@@ -739,6 +789,15 @@ function getNumberOfVisitedVertNeighbors( iVert ) {
             num_visited_faces++;
     }
     return num_visited_faces;
+}
+
+function getDefinedCount( arr ) {
+    var n = 0;
+    for( var i = 0; i < arr.length; ++i ) {
+        if( typeof arr[i] != 'undefined' )
+            n++;
+    }
+    return n;
 }
 
 window.onload = init;
@@ -810,17 +869,16 @@ instructions how to enable JavaScript in your web browser</a>.
   <input type="button" value="Go" onclick="setRowLengths();" style="vertical-align:top">
 </p>
 
-<hr>
-
 <!--
+<hr>
 <h3>Load a target mesh:</h3>
 <p>
   <textarea id="target_mesh" rows="10" cols="30" style="vertical-align:top"></textarea>
   <input type="button" value="Go" onclick="setTargetMesh();" style="vertical-align:top">
 </p>
+-->
 
 <hr>
--->
 
 <h3>What am I looking at?</h3>
 
@@ -838,6 +896,7 @@ The new chain stitch is added to the pattern and appears in the 3D view. Do it a
 <p>More details here: <a href="https://github.com/timhutton/crochet-simulator">https://github.com/timhutton/crochet-simulator</a></p> 
 
 </html>
+
 
 
 
