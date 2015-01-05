@@ -22,3 +22,4 @@ Other work:
   * http://www.cemyuksel.com/research/stitchmeshes/ (SIGGRAPH 2012)
   * http://www.slideshare.net/jmallos/triangle-strip-knitting (James Mallos, ISAMA 2010)
   * http://www.geocities.jp/igarashi_lab/papers/knit_pg08.pdf (Igarashi et al., 2008)
+  * http://www.ics.uci.edu/~gopi/PAPERS/Euro04.pdf (Single-Strip Triangulation, Gopi and Eppstein, 2004)
