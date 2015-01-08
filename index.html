@@ -52,6 +52,10 @@ var stitch_path = [];
 
 var animationRequestID = undefined;
 
+var target_edge_length = 1.0;
+var inflate = false;
+var draw_target_mesh = true;
+
 function clear() {
     // clear the existing pattern
     verts = [];
@@ -149,7 +153,7 @@ function chain( same_location ) {
         add_stitch( p3(0,0,0) );
     }
     else if( verts.length < 2 ) {
-        add_stitch( p3(1,0,0) );
+        add_stitch( p3(target_edge_length,0,0) );
         make_edge( 0, 1 );
     }
     else
@@ -225,7 +229,7 @@ function get_connection_force_on_a( a, b ) {
     var ab2 = len2( x );
     var ab = Math.sqrt( ab2 );
     var k = 0.3;
-    var d = 1;
+    var d = target_edge_length;
     return mul( x, k * ( d - ab ) / ab );
 }
 
@@ -233,7 +237,7 @@ function get_connection_force_on_a( a, b ) {
 function get_weak_repulsion_force_on_a( a, b ) {
     var x = sub( a, b );
     var ab2 = len2( x );
-    var d = 8;
+    var d = 8 * target_edge_length;
     if( ab2 < d*d ) {
         var k = 0.001;
         var ab = Math.sqrt( ab2 );
@@ -256,10 +260,12 @@ function relax() {
         vel[a] = add( vel[a], m );
         vel[b] = sub( vel[b], m );
     }
-    // I... I stumbled across this by a coding error. Adding an inflationary term seems to make all the difference.
-    var k = 0.0001;
-    for( var i = 0; i < verts.length; ++i ) {
-        vel[i] = add( vel[i], mul( verts[i], k ) );
+    if( inflate ) {
+        // I... I stumbled across this by a coding error. Adding an inflationary term seems to make all the difference.
+        var k = 0.001;
+        for( var i = 0; i < verts.length; ++i ) {
+            vel[i] = add( vel[i], mul( normalize( verts[i] ), k ) );
+        }
     }
     // add a weak repulsion from every second-neighbor
     for( var a = 0; a < verts.length; ++a ) {
@@ -378,8 +384,6 @@ function point( p ) {
 }
 
 function drawMesh() {
-
-    var draw_target_mesh = true;
 
     // project the box onto the screen
     for( var iVert = 0; iVert < box_verts.length; ++iVert ) {
@@ -647,17 +651,33 @@ function setTargetMesh() {
         mr = Math.max( mr, Math.sqrt( len2( target_mesh.verts[iVert].p3 ) ) );
     }
     for( var iVert = 0; iVert < target_mesh.verts.length; ++iVert )
-        target_mesh.verts[iVert].p3 = mul( target_mesh.verts[iVert].p3, 20 / mr );
+        target_mesh.verts[iVert].p3 = mul( target_mesh.verts[iVert].p3, 12 / mr );
     // check
     if( !checkTargetMeshIntegrity() )
         return; // TODO: alert
     // make stitch path
     makeStitchPathForTargetMesh();
+    // make crochet pattern and display it
     var pattern = makePatternFromStitchPath();
     loadPattern( pattern );
+    document.getElementById('link').innerHTML = "";
+    document.getElementById('current_stitches').value = "";
+    var new_url = window.location.protocol + '//' + window.location.host + window.location.pathname;
+    window.history.pushState( {}, "", new_url );
     // for larger patterns is better to connect the whole mesh and then relax it
     while( pending_commands.length > 0 )
         doNextStitch( true );
+    // also put each vert into the right position on the target mesh before relaxing
+    var mean_stitch_length = 0.0;
+    var mean_stitch_length_count = 0;
+    for( var iVert = 0; iVert < verts.length; ++iVert ) {
+        verts[ iVert ] = getFaceCenter( stitch_path[ iVert ] );
+        if( iVert > 0 ) {
+            mean_stitch_length += dist( verts[ iVert ], verts[ iVert-1 ] );
+            mean_stitch_length_count++;
+        }
+    }
+    target_edge_length = mean_stitch_length / mean_stitch_length_count;
     animate();
 }
 
@@ -861,10 +881,6 @@ function flipUnvisitedTriangle( iUnvisitedFace, iVisitedFace, iEdge ) {
     stitch_path.splice( iStitch+1, 0, iUnvisitedFace );
     target_mesh.faces[ iUnvisitedFace ].visited = true;
     
-    // check:
-    if( !checkTargetMeshIntegrity() || !stitchPathIsValid() )
-        return false; // throw "flipUnvisitedTriangle broke something";
-        
     return true;
 }
 
@@ -878,10 +894,6 @@ function getOtherVert( iFace, iVert1, iVert2 ) {
 }
 
 function extendStitchAroundVert( iStartStitch, iVert ) {
-    if( !stitchPathIsValid() ) {
-        // internal error
-        return;
-    }
     // re-route the stitch path around the other side of iVert
     var iStartFace = stitch_path[ iStartStitch ];
     var iEndFace = stitch_path[ iStartStitch + 1 ];
@@ -903,10 +915,6 @@ function extendStitchAroundVert( iStartStitch, iVert ) {
             }
         }
         if( !added ) break;
-    }
-    if( !stitchPathIsValid() ) {
-        // internal error
-        return;
     }
 }
 
@@ -1002,6 +1010,26 @@ function getFaceNeighbors( iCenterFace ) {
     return faces;
 }
 
+function getFaceCenter( iFace ) {
+    var c = p3(0,0,0);
+    for( var iiVert = 0; iiVert < target_mesh.faces[ iFace ].verts.length; ++iiVert ) {
+        var iVert = target_mesh.faces[ iFace ].verts[ iiVert ];
+        c = add( c, target_mesh.verts[ iVert ].p3 );
+    }
+    c = mul( c, 1.0 / target_mesh.faces[ iFace ].verts.length );
+    return c;
+}
+
+function toggleInflation() {
+    inflate = !inflate;
+    document.getElementById('toggle_inflation').value = inflate?'Turn inflation off':'Turn inflation on';
+}
+
+function toggleTargetMesh() {
+    draw_target_mesh = !draw_target_mesh;
+    document.getElementById('toggle_target_mesh').value = draw_target_mesh?'Hide target mesg':'Show target mesh';
+}
+
 window.onload = init;
 </script>
 
@@ -1015,7 +1043,12 @@ instructions how to enable JavaScript in your web browser</a>.
 
 <body>
 
-<p align="center"><canvas id="canvas" width="1000" height="600">(Canvas drawing not supported by your browser.)</canvas></p>
+<table border="0">
+<tr>
+<td><canvas id="canvas" width="1000" height="600">(Canvas drawing not supported by your browser.)</canvas></td>
+<td><input id='toggle_inflation' type="button" value="Turn inflation on" onclick="toggleInflation();"><br>
+<input id='toggle_target_mesh' type="button" value="Hide target mesh" onclick="toggleTargetMesh();"></td></tr>
+</table>
 
 <div id="link">link</div>
 
