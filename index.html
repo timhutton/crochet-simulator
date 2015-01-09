@@ -519,7 +519,7 @@ function animate() {
     }
     var is_relaxed = relax();
     if( is_relaxed )
-        doNextStitch( false );
+        doNextStitch( true );
     redraw();
     animationRequestID = requestAnimationFrame( animate );
 }
@@ -653,8 +653,10 @@ function setTargetMesh() {
     for( var iVert = 0; iVert < target_mesh.verts.length; ++iVert )
         target_mesh.verts[iVert].p3 = mul( target_mesh.verts[iVert].p3, 12 / mr );
     // check
-    if( !checkTargetMeshIntegrity() )
-        return; // TODO: alert
+    if( !checkTargetMeshIntegrity() ) {
+        clear();
+        return;
+    }
     // make stitch path
     makeStitchPathForTargetMesh();
     // make crochet pattern and display it
@@ -678,32 +680,45 @@ function setTargetMesh() {
         }
     }
     target_edge_length = mean_stitch_length / mean_stitch_length_count;
+    document.getElementById('current_stitches').value = current_pattern;
     animate();
 }
 
 function checkTargetMeshIntegrity() {
     // for each vert: same number of edges and faces? and >2?
     for( var iVert = 0; iVert < target_mesh.verts.length; ++iVert ) {
-        if( getDefinedCount( target_mesh.verts[ iVert ].edges ) != target_mesh.verts[ iVert ].faces.length )
+        if( getDefinedCount( target_mesh.verts[ iVert ].edges ) != target_mesh.verts[ iVert ].faces.length ) {
+            alert( 'Mesh has mismatch edge:face count around a vertex.' );
             return false;
-        if( target_mesh.verts[ iVert ].faces.length <= 2 )
+        }
+        if( target_mesh.verts[ iVert ].faces.length <= 2 ) {
+            alert( 'Mesh has < 3 faces around vertex ' + iVert.toFixed() );
             return false;
+        }
     }
     // for edges: does each edge join exactly two faces?
     for( var iEdge = 0; iEdge < target_mesh.edges.length; ++iEdge ) {
         if( typeof target_mesh.edges[ iEdge ] == 'undefined' )
             continue; // (edges is a sparse array)
-        if( target_mesh.edges[ iEdge ].verts.length != 2 )
+        if( target_mesh.edges[ iEdge ].verts.length != 2 ) {
+            alert( 'Internal error loading mesh.' );
             return false;
-        if( target_mesh.edges[ iEdge ].faces.length != 2 )
+        }
+        if( target_mesh.edges[ iEdge ].faces.length != 2 ) {
+            alert( 'Mesh has a non-manifold edge.' );
             return false;
+        }
     }
     // for faces: number of edges and verts == 3?
     for( var iFace = 0; iFace < target_mesh.faces.length; ++iFace ) {
-        if( target_mesh.faces[ iFace ].edges.length != 3 )
+        if( target_mesh.faces[ iFace ].edges.length != 3 ) {
+            alert( 'Mesh has a non-triangular face.' );
             return false;
-        if( target_mesh.faces[ iFace ].verts.length != 3 )
+        }
+        if( target_mesh.faces[ iFace ].verts.length != 3 ) {
+            alert( 'Mesh has a non-triangular face.' );
             return false;
+        }
     }
     return true;
 }
