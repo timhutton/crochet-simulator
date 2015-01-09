@@ -988,6 +988,9 @@ function getDefinedCount( arr ) {
 
 function makePatternFromStitchPath() {
     var pattern = "(c)2"; // chain for first two stitches
+    var pending_stitch = "";
+    var n_pending = 0;
+    var new_stitch = "";
     for( var iStitch = 2; iStitch < stitch_path.length-1; ++iStitch ) {
         var faces = getFaceNeighbors( stitch_path[ iStitch ] );
         faces.splice( faces.indexOf( stitch_path[ iStitch - 1 ] ), 1 ); // remove the previous face in the stitch path
@@ -996,12 +999,26 @@ function makePatternFromStitchPath() {
         var iOtherStitch = stitch_path.indexOf( iOtherFace );
         if( iOtherStitch < iStitch ) {
             // single crochet, joining with older stitch
-            pattern += "sc-" + (iStitch - 1 - iOtherStitch).toFixed();
+            new_stitch = "sc-" + (iStitch - 1 - iOtherStitch).toFixed();
         }
         else {
-            pattern += "c"; // chain
+            new_stitch = "c"; // chain
+        }
+        if( new_stitch == pending_stitch )
+            n_pending++;
+        else {
+            if( n_pending > 1 )
+                pattern += "(" + pending_stitch + ")" + n_pending.toFixed();
+            else
+                pattern += pending_stitch;
+            pending_stitch = new_stitch;
+            n_pending = 1;
         }
     }
+    if( n_pending > 1 )
+        pattern += "(" + pending_stitch + ")" + n_pending.toFixed();
+    else
+        pattern += pending_stitch;
     // last stitch: single crochet to two previous stitches and cast off
     var iStitch = stitch_path.length - 1;
     var faces = getFaceNeighbors( stitch_path[ iStitch ] );
