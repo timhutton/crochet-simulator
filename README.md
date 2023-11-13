@@ -3,7 +3,10 @@ crochet-simulator
 
 Predicting the 3D shape from a crochet pattern.
 
+<a href="https://timhutton.github.io/crochet-simulator/?(c)21(sc-20)400"><img src="https://github.com/timhutton/crochet-simulator/assets/647092/9761f425-932b-423f-9f96-1c854bbc91c6"></a>
+
 Demos:
+------
 
 [Cylinder](http://timhutton.github.io/crochet-simulator/)
 
@@ -18,6 +21,7 @@ Add your own patterns to the wiki: https://github.com/timhutton/crochet-simulato
 ----
 
 Other work:
+-----------
 
   * http://www.cemyuksel.com/research/stitchmeshes/ (SIGGRAPH 2012)
   * https://github.com/dchudz/Knit3d (David Chudzicki, 2011)
