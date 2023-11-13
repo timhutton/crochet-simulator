@@ -3,7 +3,7 @@ crochet-simulator
 
 Predicting the 3D shape from a crochet pattern.
 
-<a href="https://timhutton.github.io/crochet-simulator/?(c)21(sc-20)400"><img src="https://github.com/timhutton/crochet-simulator/assets/647092/9761f425-932b-423f-9f96-1c854bbc91c6"></a>
+<a href="https://timhutton.github.io/crochet-simulator/?(c)21(sc-20)400"><img src="https://github-production-user-asset-6210df.s3.amazonaws.com/647092/282496891-9761f425-932b-423f-9f96-1c854bbc91c6.png" /></a>
 
 Demos:
 ------
